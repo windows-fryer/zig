@@ -221,6 +221,9 @@ pub fn errno(rc: anytype) E {
     if (use_libc) {
         return if (rc == -1) @enumFromInt(std.c._errno().*) else .SUCCESS;
     }
+    if (@TypeOf(rc) == std.os.linux.ReturnCode) {
+        return rc.errno();
+    }
     const signed: isize = @bitCast(rc);
     const int = if (signed > -4096 and signed < 0) -signed else 0;
     return @enumFromInt(int);
@@ -1219,7 +1222,7 @@ pub fn write(fd: fd_t, bytes: []const u8) WriteError!usize {
     while (true) {
         const rc = system.write(fd, bytes.ptr, @min(bytes.len, max_count));
         switch (errno(rc)) {
-            .SUCCESS => return @intCast(rc),
+            .SUCCESS => return rc.toUnsigned(),
             .INTR => continue,
             .INVAL => return error.InvalidArgument,
             .FAULT => unreachable,
@@ -1781,7 +1784,7 @@ pub fn openatZ(dir_fd: fd_t, file_path: [*:0]const u8, flags: O, mode: mode_t) O
 pub fn dup(old_fd: fd_t) !fd_t {
     const rc = system.dup(old_fd);
     return switch (errno(rc)) {
-        .SUCCESS => return @intCast(rc),
+        .SUCCESS => return rc.toFd(),
         .MFILE => error.ProcessFdQuotaExceeded,
         .BADF => unreachable, // invalid file descriptor
         else => |err| return unexpectedErrno(err),
